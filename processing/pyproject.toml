@@ -12,7 +12,9 @@ dependencies = [
     "zhipuai (>=2.1.5.20250526,<3.0.0.0)",
     "tqdm (>=4.67.1,<5.0.0)",
     "pymupdf (>=1.26.0,<2.0.0)",
-    "python-dotenv (>=1.1.0,<2.0.0)"
+    "python-dotenv (>=1.1.0,<2.0.0)",
+    "sentence-transformers (>=4.1.0,<5.0.0)",
+    "chromadb (>=1.0.12,<2.0.0)"
 ]
 
 [tool.poetry]
