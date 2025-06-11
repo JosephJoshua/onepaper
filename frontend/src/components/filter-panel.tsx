@@ -33,7 +33,6 @@ export default function FilterPanel({
           placeholder="Search title or abstract..."
           value={filters.search}
           onChange={(e) => onFilterChange({ search: e.target.value })}
-          onKeyDown={(e) => e.key === "Enter" && onApplyFilters()}
         />
       </div>
 

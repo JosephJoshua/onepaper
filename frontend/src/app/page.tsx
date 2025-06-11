@@ -6,6 +6,10 @@ import PaperCard from "@/components/paper-card";
 import { useAuth } from "@/context/auth-context";
 import FilterPanel, { Filters } from "@/components/filter-panel";
 import PaginationControls from "@/components/pagination-controls";
+import PaperCardSkeleton from "@/components/paper-card-skeleton";
+import {useDebounce} from "@/hooks/use-debounce";
+import { Badge } from "@/components/ui/badge";
+import {X} from "lucide-react";
 
 interface Paper {
   id: string;
@@ -31,6 +35,8 @@ export default function HomePage() {
 
   const { isAuthenticated } = useAuth();
 
+  const debouncedSearchTerm = useDebounce(filters.search, 500);
+
   const fetchPapers = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -39,7 +45,7 @@ export default function HomePage() {
         per_page: "12",
       });
 
-      if (filters.search) params.append("search", filters.search);
+      if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
       if (filters.has_code) params.append("has_code", "true");
 
       const response = await api.get("/papers", { params });
@@ -50,7 +56,7 @@ export default function HomePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, filters]);
+  }, [currentPage, filters.has_code, debouncedSearchTerm]);
 
   useEffect(() => {
     fetchPapers();
@@ -107,28 +113,49 @@ export default function HomePage() {
       {/* Main content */}
       <main className="lg:col-span-3">
         <h1 className="text-3xl font-bold mb-6">Papers</h1>
+
+        {(filters.search || filters.has_code) && <div className="flex flex-wrap items-center gap-2 mb-4 min-h-[2rem]">
+          {filters.search && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                Search: &quot;{filters.search}&quot;
+              </Badge>
+          )}
+          {filters.has_code && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                Has Code
+                <button onClick={() => handleFilterChange({has_code: false})}>
+                  <X className="h-3 w-3"/>
+                </button>
+              </Badge>
+          )}
+        </div>}
+
         {isLoading ? (
-          <p>Loading...</p> // Replace with skeleton loaders
-        ) : papers.length > 0 ? (
-          <>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {papers.map((paper) => (
-                <PaperCard
-                  key={paper.id}
-                  paper={paper}
-                  isBookmarked={bookmarkedIds.has(paper.id)}
-                  onBookmarkToggle={handleBookmarkToggle}
-                />
+              {Array.from({length: 6}).map((_, index) => (
+                  <PaperCardSkeleton key={index}/>
               ))}
             </div>
-            <PaginationControls
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={handlePageChange}
-            />
-          </>
+        ) : papers.length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {papers.map((paper) => (
+                    <PaperCard
+                        key={paper.id}
+                        paper={paper}
+                        isBookmarked={bookmarkedIds.has(paper.id)}
+                        onBookmarkToggle={handleBookmarkToggle}
+                    />
+                ))}
+              </div>
+              <PaginationControls
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+              />
+            </>
         ) : (
-          <p>No papers found matching your criteria.</p>
+            <p>No papers found matching your criteria.</p>
         )}
       </main>
     </div>
