@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import api from "@/lib/api";
+import api, {ApiPaperBase} from "@/lib/api";
 import PaperCard from "@/components/paper-card";
 import { useAuth } from "@/context/auth-context";
 import FilterPanel, { Filters } from "@/components/filter-panel";
@@ -11,15 +11,8 @@ import {useDebounce} from "@/hooks/use-debounce";
 import { Badge } from "@/components/ui/badge";
 import {X} from "lucide-react";
 
-interface Paper {
-  id: string;
-  title: string;
-  authors: string[];
-  publication_year: number;
-}
-
 export default function HomePage() {
-  const [papers, setPapers] = useState<Paper[]>([]);
+  const [papers, setPapers] = useState<ApiPaperBase[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
 
@@ -65,7 +58,7 @@ export default function HomePage() {
   const fetchBookmarks = useCallback(async () => {
     if (isAuthenticated) {
       const response = await api.get("/me/bookmarks");
-      const ids = new Set<string>(response.data.map((p: Paper) => p.id));
+      const ids = new Set<string>(response.data.map((p: ApiPaperBase) => p.id));
       setBookmarkedIds(ids);
     } else {
       setBookmarkedIds(new Set());

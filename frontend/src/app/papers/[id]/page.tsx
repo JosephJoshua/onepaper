@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import api from "@/lib/api";
+import api, {ApiPaperBase} from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, Code } from "lucide-react";
+import { Code } from "lucide-react";
+import Link from "next/link";
+import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 
 interface PaperDetails {
   id: string;
@@ -40,6 +42,7 @@ export default function PaperDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const [paper, setPaper] = useState<PaperDetails | null>(null);
+  const [recommendations, setRecommendations] = useState<ApiPaperBase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,7 +61,18 @@ export default function PaperDetailPage() {
           setLoading(false);
         }
       };
+
+      const fetchRecommendations = async () => {
+        try {
+          const response = await api.get(`/papers/${id}/recommendations`);
+          setRecommendations(response.data);
+        } catch (err) {
+          console.error("Failed to fetch recommendations:", err);
+        }
+      };
+
       fetchPaperDetails();
+      fetchRecommendations();
     }
   }, [id]);
 
@@ -125,6 +139,29 @@ export default function PaperDetailPage() {
         <InfoSection title="Methods" items={paper.methods} />
         <InfoSection title="Datasets" items={paper.datasets} />
       </div>
+
+      {recommendations.length > 0 && (
+          <>
+            <Separator className="my-8" />
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold mb-4">You Might Also Like</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {recommendations.map((rec) => (
+                    <Link href={`/papers/${rec.id}`} key={rec.id}>
+                      <Card className="h-full hover:bg-accent">
+                        <CardHeader>
+                          <CardTitle className="text-base">{rec.title}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-xs text-muted-foreground">{rec.authors.join(", ")}</p>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                ))}
+              </div>
+            </div>
+          </>
+      )}
     </div>
   );
 }
