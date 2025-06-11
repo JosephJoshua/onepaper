@@ -18,6 +18,13 @@ class Paper(PaperBase):
     class Config:
         from_attributes = True
 
+class PaginatedPaperResponse(BaseModel):
+    total_items: int
+    total_pages: int
+    page: int
+    per_page: int
+    items: List[PaperBase]
+
 # --- User Schemas ---
 class UserBase(BaseModel):
     email: EmailStr

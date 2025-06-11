@@ -30,16 +30,16 @@ class Paper(Base):
         return json.loads(self.authors).split(",") if self.authors else []
 
     def get_tasks_list(self):
-        return json.loads(self.tasks) if self.tasks else []
+        return json.loads(self.tasks if len(self.tasks.strip("'").strip('"')) > 0 else '[]')
 
     def get_methods_list(self):
-        return json.loads(self.methods) if self.methods else []
+        return json.loads(self.methods if len(self.methods.strip("'").strip('"')) > 0 else '[]')
 
     def get_datasets_list(self):
-        return json.loads(self.datasets) if self.datasets else []
+        return json.loads(self.datasets if len(self.datasets.strip("'").strip('"')) > 0 else '[]')
 
     def get_code_links_list(self):
-        return json.loads(self.code_links) if self.code_links else []
+        return json.loads(self.code_links if len(self.code_links.strip("'").strip('"')) > 0 else '[]')
 
 class Bookmark(Base):
     __tablename__ = "bookmarks"

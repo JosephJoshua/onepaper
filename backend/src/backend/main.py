@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from datetime import timedelta
 
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -60,11 +60,49 @@ def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
 
 
 # --- Paper Endpoints ---
-@app.get("/papers", response_model=List[schemas.PaperBase])
-def read_papers(skip: int = 0, limit: int = 20, db: Session = Depends(database.get_db)):
-    papers = db.query(models.Paper).offset(skip).limit(limit).all()
-    return [schemas.PaperBase(id=p.id, title=p.title, authors=p.get_authors_list())
-            for p in papers]
+@app.get("/papers", response_model=schemas.PaginatedPaperResponse)
+def read_papers(
+    db: Session = Depends(database.get_db),
+    page: int = 1,
+    per_page: int = 12,
+    search: Optional[str] = None,
+    has_code: Optional[bool] = None,
+):
+    query = db.query(models.Paper)
+
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.filter(
+            (models.Paper.title.ilike(search_term)) |
+            (models.Paper.abstract.ilike(search_term))
+        )
+
+    if has_code is not None:
+        if has_code:
+            query = query.filter(models.Paper.code_links.isnot(None)).filter(models.Paper.code_links != '[]')
+        else:
+            query = query.filter((models.Paper.code_links.is_(None)) | (models.Paper.code_links == '[]'))
+
+    total_items = query.count()
+
+    offset = (page - 1) * per_page
+    papers = query.offset(offset).limit(per_page).all()
+
+    parsed_papers = [
+        schemas.PaperBase(
+            id=p.id,
+            title=p.title,
+            authors=p.get_authors_list(),
+        ) for p in papers
+    ]
+
+    return {
+        "total_items": total_items,
+        "total_pages": (total_items + per_page - 1) // per_page,
+        "page": page,
+        "per_page": per_page,
+        "items": parsed_papers,
+    }
 
 
 @app.get("/papers/{paper_id}", response_model=schemas.Paper)
