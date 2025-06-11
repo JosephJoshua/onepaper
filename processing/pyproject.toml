@@ -1,0 +1,24 @@
+[project]
+name = "processing"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "JosephJoshua",email = "jj.anggita@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "remotezip (>=0.12.3,<0.13.0)",
+    "zhipuai (>=2.1.5.20250526,<3.0.0.0)",
+    "tqdm (>=4.67.1,<5.0.0)",
+    "pymupdf (>=1.26.0,<2.0.0)",
+    "python-dotenv (>=1.1.0,<2.0.0)"
+]
+
+[tool.poetry]
+packages = [{include = "processing", from = "src"}]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
