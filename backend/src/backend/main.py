@@ -8,7 +8,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import auth, models, schemas, database
 
+import chromadb
+from sentence_transformers import SentenceTransformer
+
 models.Base.metadata.create_all(bind=database.engine)
+
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+chroma_client = chromadb.PersistentClient(path="chroma_db")
+paper_collection = chroma_client.get_collection(name="papers")
 
 app = FastAPI()
 
@@ -23,7 +30,10 @@ app.add_middleware(
 
 # --- Authentication Endpoints ---
 @app.post("/token", response_model=schemas.Token)
-def login_for_access_token(db: Session = Depends(database.get_db), form_data: OAuth2PasswordRequestForm = Depends()):
+def login_for_access_token(
+    db: Session = Depends(database.get_db),
+    form_data: OAuth2PasswordRequestForm = Depends(),
+):
     user = auth.get_user(db, email=form_data.username)  # username is the email
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
@@ -45,7 +55,9 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)
         raise HTTPException(status_code=400, detail="Email already registered")
     hashed_password = auth.get_password_hash(user.password)
 
-    db_user = models.User(email=str(user.email), name=user.name, hashed_password=hashed_password)
+    db_user = models.User(
+        email=str(user.email), name=user.name, hashed_password=hashed_password
+    )
 
     db.add(db_user)
     db.commit()
@@ -68,23 +80,52 @@ def read_papers(
     search: Optional[str] = None,
     has_code: Optional[bool] = None,
 ):
-    query = db.query(models.Paper)
-
     if search:
-        search_term = f"%{search.strip()}%"
-        query = query.filter(
-            (models.Paper.title.ilike(search_term)) |
-            (models.Paper.abstract.ilike(search_term))
+        print(f"Performing semantic search for: '{search}'")
+
+        query_embedding = embedding_model.encode(search).tolist()
+
+        results = paper_collection.query(
+            query_embeddings=[query_embedding],
+            n_results=200,
         )
+
+        similar_ids = results["ids"][0]
+        if not similar_ids:
+            # If no semantic matches, return empty
+            return {
+                "total_items": 0,
+                "total_pages": 0,
+                "page": 1,
+                "per_page": per_page,
+                "items": [],
+            }
+
+        from sqlalchemy import case
+
+        ordering = case(
+            {id: i for i, id in enumerate(similar_ids)}, value=models.Paper.id
+        )
+        query = (
+            db.query(models.Paper)
+            .filter(models.Paper.id.in_(similar_ids))
+            .order_by(ordering)
+        )
+
+    else:
+        query = db.query(models.Paper).order_by(models.Paper.title.desc())
 
     if has_code is not None:
         if has_code:
-            query = query.filter(models.Paper.code_links.isnot(None)).filter(models.Paper.code_links != '[]')
+            query = query.filter(models.Paper.code_links.isnot(None)).filter(
+                models.Paper.code_links != "[]"
+            )
         else:
-            query = query.filter((models.Paper.code_links.is_(None)) | (models.Paper.code_links == '[]'))
+            query = query.filter(
+                (models.Paper.code_links.is_(None)) | (models.Paper.code_links == "[]")
+            )
 
     total_items = query.count()
-
     offset = (page - 1) * per_page
     papers = query.offset(offset).limit(per_page).all()
 
@@ -93,7 +134,8 @@ def read_papers(
             id=p.id,
             title=p.title,
             authors=p.get_authors_list(),
-        ) for p in papers
+        )
+        for p in papers
     ]
 
     return {
@@ -103,6 +145,57 @@ def read_papers(
         "per_page": per_page,
         "items": parsed_papers,
     }
+
+
+@app.get("/papers/{paper_id}/recommendations", response_model=List[schemas.PaperBase])
+def get_recommendations(paper_id: str, db: Session = Depends(database.get_db)):
+    print(f"\n--- Getting recommendations for paper_id: '{paper_id}' ---")
+
+    try:
+        retrieved_item = paper_collection.get(ids=[paper_id], include=["embeddings"])
+
+        if not retrieved_item or not retrieved_item["ids"]:
+            print(f"Error: Paper ID '{paper_id}' NOT FOUND in ChromaDB collection.")
+            return []
+
+        query_embedding = retrieved_item["embeddings"]
+
+        results = paper_collection.query(
+            query_embeddings=query_embedding, n_results=6  # Get top 5 + the item itself
+        )
+
+        recommended_ids = [pid for pid in results["ids"][0] if pid != paper_id]
+
+        if not recommended_ids:
+            print("No other similar papers found after excluding the source paper.")
+            return []
+
+        from sqlalchemy import case
+
+        ordering = case(
+            {id: i for i, id in enumerate(recommended_ids)}, value=models.Paper.id
+        )
+        papers = (
+            db.query(models.Paper)
+            .filter(models.Paper.id.in_(recommended_ids))
+            .order_by(ordering)
+            .all()
+        )
+
+        print(f"Successfully fetched {len(papers)} papers from SQLite.")
+
+        return [
+            schemas.PaperBase(
+                id=p.id,
+                title=p.title,
+                authors=p.get_authors_list(),
+            )
+            for p in papers
+        ]
+    except Exception as e:
+        # This can happen if the paper_id is not in ChromaDB
+        print(f"Could not get recommendations for {paper_id}: {e}")
+        return []
 
 
 @app.get("/papers/{paper_id}", response_model=schemas.Paper)
@@ -126,20 +219,25 @@ def read_paper(paper_id: str, db: Session = Depends(database.get_db)):
 
 # --- Bookmark Endpoints ---
 
+
 @app.post("/papers/{paper_id}/bookmark", status_code=status.HTTP_201_CREATED)
 def create_bookmark(
-        paper_id: str,
-        db: Session = Depends(database.get_db),
-        current_user: models.User = Depends(auth.get_current_user)
+    paper_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user),
 ):
     db_paper = db.query(models.Paper).filter(models.Paper.id == paper_id).first()
     if not db_paper:
         raise HTTPException(status_code=404, detail="Paper not found")
 
-    existing_bookmark = db.query(models.Bookmark).filter(
-        models.Bookmark.user_id == current_user.id,
-        models.Bookmark.paper_id == paper_id
-    ).first()
+    existing_bookmark = (
+        db.query(models.Bookmark)
+        .filter(
+            models.Bookmark.user_id == current_user.id,
+            models.Bookmark.paper_id == paper_id,
+        )
+        .first()
+    )
     if existing_bookmark:
         raise HTTPException(status_code=400, detail="Paper already bookmarked")
 
@@ -152,14 +250,18 @@ def create_bookmark(
 
 @app.delete("/papers/{paper_id}/bookmark", status_code=status.HTTP_204_NO_CONTENT)
 def delete_bookmark(
-        paper_id: str,
-        db: Session = Depends(database.get_db),
-        current_user: models.User = Depends(auth.get_current_user)
+    paper_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user),
 ):
-    bookmark_to_delete = db.query(models.Bookmark).filter(
-        models.Bookmark.user_id == current_user.id,
-        models.Bookmark.paper_id == paper_id
-    ).first()
+    bookmark_to_delete = (
+        db.query(models.Bookmark)
+        .filter(
+            models.Bookmark.user_id == current_user.id,
+            models.Bookmark.paper_id == paper_id,
+        )
+        .first()
+    )
 
     if not bookmark_to_delete:
         raise HTTPException(status_code=404, detail="Bookmark not found")
@@ -171,11 +273,16 @@ def delete_bookmark(
 
 @app.get("/me/bookmarks", response_model=List[schemas.PaperBase])
 def get_my_bookmarks(
-        db: Session = Depends(database.get_db),
-        current_user: models.User = Depends(auth.get_current_user)
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user),
 ):
-    bookmarked_papers = db.query(models.Paper).join(models.Bookmark).filter(
-        models.Bookmark.user_id == current_user.id
-    ).all()
-    return [schemas.PaperBase(id=p.id, title=p.title, authors=p.get_authors_list())
-            for p in bookmarked_papers]
+    bookmarked_papers = (
+        db.query(models.Paper)
+        .join(models.Bookmark)
+        .filter(models.Bookmark.user_id == current_user.id)
+        .all()
+    )
+    return [
+        schemas.PaperBase(id=p.id, title=p.title, authors=p.get_authors_list())
+        for p in bookmarked_papers
+    ]
