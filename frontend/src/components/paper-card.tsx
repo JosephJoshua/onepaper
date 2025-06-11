@@ -12,6 +12,8 @@ import { Bookmark } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
+import React from "react";
+import Link from "next/link";
 
 interface Paper {
   id: string;
@@ -56,25 +58,31 @@ export default function PaperCard({
     <Card>
       <CardHeader>
         <CardTitle className={"flex gap-1 items-start"}>
-          <span className={"flex-1"}>
+          <Link
+            href={`/papers/${paper.id}`}
+            className={"flex-1 hover:underline"}
+          >
             {paper.title}
-          </span>
+          </Link>
 
-          <Button onClick={handleBookmark} variant="ghost" size="icon" className={"-mt-2"}>
+          <Button
+            onClick={handleBookmark}
+            variant="ghost"
+            size="icon"
+            className={"-mt-2"}
+          >
             <Bookmark
-                className={isBookmarked ? "fill-primary text-primary" : ""}
+              className={isBookmarked ? "fill-primary text-primary" : ""}
             />
           </Button>
         </CardTitle>
-
       </CardHeader>
       <CardContent>
         <p className="text-sm text-muted-foreground">
           {paper.authors.join(", ")}
         </p>
       </CardContent>
-      <CardFooter>
-      </CardFooter>
+      <CardFooter></CardFooter>
     </Card>
   );
 }
