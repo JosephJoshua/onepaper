@@ -61,10 +61,7 @@ export default function SubmitPage() {
         arxiv_id: values.arxivId,
       });
 
-      toast.success("Submission Accepted", {
-        description:
-          "The paper is being processed. It will appear in search results shortly.",
-      });
+      router.push(`/submit/status?arxivId=${values.arxivId}`);
       form.reset(); // Clear the form on success
     } catch (error: unknown) {
       const detail =
