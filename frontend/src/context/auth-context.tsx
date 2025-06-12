@@ -32,7 +32,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
-      const _ = fetchUser();
+      fetchUser();
     }
   }, []);
 
