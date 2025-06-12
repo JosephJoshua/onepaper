@@ -25,9 +25,14 @@ class Paper(Base):
     methods = Column(Text) # JSON string
     datasets = Column(Text) # JSON string
     code_links = Column(Text) # JSON string
+    processed = Column(Integer, default=0)
 
     def get_authors_list(self):
-        return json.loads(self.authors).split(",") if self.authors else []
+        if self.authors is None:
+            return []
+
+        authors = self.authors if self.authors.startswith('"') else f'"{self.authors}"'
+        return json.loads(authors).split(",")
 
     def get_tasks_list(self):
         return json.loads(self.tasks if len(self.tasks.strip("'").strip('"')) > 0 else '[]')

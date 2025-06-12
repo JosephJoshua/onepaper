@@ -1,11 +1,9 @@
-import os
 from typing import List, Optional
 from datetime import timedelta
 
-import redis
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
-from rq import Queue
+from sqlalchemy import case
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -17,12 +15,8 @@ from sentence_transformers import SentenceTransformer
 models.Base.metadata.create_all(bind=database.engine)
 
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-chroma_client = chromadb.PersistentClient(path="/app/data/chroma_db")
+chroma_client = chromadb.PersistentClient(path="chroma_db")
 paper_collection = chroma_client.get_collection(name="papers")
-
-redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
-conn = redis.from_url(redis_url)
-q = Queue(connection=conn)
 
 app = FastAPI()
 
@@ -82,6 +76,7 @@ def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
 @app.post("/papers/submit", status_code=status.HTTP_202_ACCEPTED)
 def submit_paper_for_processing(
         submission: schemas.ArxivSubmission,
+        background_tasks: BackgroundTasks,
         db: Session = Depends(database.get_db),
         current_user: models.User = Depends(auth.get_current_user),
 ):
@@ -92,9 +87,20 @@ def submit_paper_for_processing(
             detail=f"Paper with arXiv ID {submission.arxiv_id} has already been fully processed."
         )
 
-    job = q.enqueue(tasks.process_new_paper, submission.arxiv_id, job_timeout='10m')
+    try:
+        background_tasks.add_task(tasks.process_new_paper, submission.arxiv_id)
+    except Exception as e:
+        print(f"--- FAILED to enqueue task for arXiv ID: {submission.arxiv_id}. Error: {e} ---")
 
-    return {"message": "Paper submission accepted for processing.", "job_id": job.id}
+        import traceback
+        traceback.print_exc()
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to enqueue the processing task."
+        )
+
+    return {"message": "Paper submission accepted for processing."}
 
 @app.get("/papers", response_model=schemas.PaginatedPaperResponse)
 def read_papers(
@@ -105,35 +111,42 @@ def read_papers(
     has_code: Optional[bool] = None,
 ):
     if search:
-        print(f"Performing semantic search for: '{search}'")
+        print(f"Performing hybrid search for: '{search}'")
 
         query_embedding = embedding_model.encode(search).tolist()
-
         results = paper_collection.query(
             query_embeddings=[query_embedding],
-            n_results=200,
+            n_results=200,  # Get a decent number of candidates
         )
+        semantic_ids = results["ids"][0]
 
-        similar_ids = results["ids"][0]
-        if not similar_ids:
-            # If no semantic matches, return empty
-            return {
-                "total_items": 0,
-                "total_pages": 0,
-                "page": 1,
-                "per_page": per_page,
-                "items": [],
-            }
+        if not semantic_ids:
+            return {"total_items": 0, "total_pages": 0, "page": 1, "per_page": per_page, "items": []}
 
-        from sqlalchemy import case
+        # This gives a huge boost to title matches.
+        search_term_for_sql = f"%{search}%"
 
-        ordering = case(
-            {id: i for i, id in enumerate(similar_ids)}, value=models.Paper.id
-        )
+        # The CASE statement assigns a score:
+        # - Score 3: Exact match in title (highest priority)
+        # - Score 2: Match in abstract
+        # - Score 1: Semantically similar (from ChromaDB)
+        # - Score 0: Fallback (shouldn't happen)
+        ranking_score = case(
+            (models.Paper.title.ilike(search_term_for_sql), 3),
+            (models.Paper.abstract.ilike(search_term_for_sql), 2),
+            else_=1
+        ).label("ranking_score")
+
+        # We also need to preserve the original semantic order for items with the same score.
+        semantic_order = case(
+            {id: i for i, id in enumerate(semantic_ids)},
+            value=models.Paper.id
+        ).label("semantic_order")
+
         query = (
             db.query(models.Paper)
-            .filter(models.Paper.id.in_(similar_ids))
-            .order_by(ordering)
+            .filter(models.Paper.id.in_(semantic_ids))
+            .order_by(ranking_score.desc(), semantic_order.asc())  # Order by our new score first!
         )
 
     else:
@@ -239,6 +252,22 @@ def read_paper(paper_id: str, db: Session = Depends(database.get_db)):
         datasets=db_paper.get_datasets_list(),
         code_links=db_paper.get_code_links_list(),
     )
+
+@app.get("/papers/status/{arxiv_id}", status_code=status.HTTP_200_OK)
+def get_paper_processing_status(arxiv_id: str, db: Session = Depends(database.get_db)):
+    """
+    Checks if a paper has been fully processed (processed == 2).
+    """
+    paper = db.query(models.Paper).filter(models.Paper.id == arxiv_id).first()
+    if paper and paper.processed == 2:
+        # The paper exists and has been fully processed by the worker.
+        return {"status": "completed"}
+    elif paper:
+        # The paper exists but is still being processed.
+        return {"status": "processing"}
+    else:
+        # The paper is not yet in the database at all.
+        return {"status": "pending"}
 
 
 # --- Bookmark Endpoints ---

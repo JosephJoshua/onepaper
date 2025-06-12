@@ -7,8 +7,8 @@ import traceback
 from sentence_transformers import SentenceTransformer
 from zhipuai import ZhipuAI
 
-DB_FILE = "/app/data/papers.db"
-CHROMA_DB_PATH = "/app/data/chroma_db"
+DB_FILE = "papers.db"
+CHROMA_DB_PATH = "chroma_db"
 COLLECTION_NAME = "papers"
 MODEL_NAME = "all-MiniLM-L6-v2"
 ZHIPU_API_KEY = os.getenv("ZHIPU_API_KEY")
