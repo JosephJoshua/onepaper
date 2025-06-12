@@ -1,0 +1,23 @@
+# FastAPI and Server
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database
+sqlalchemy
+
+# Authentication
+python-jose[cryptography]
+passlib[argon2]
+
+# Background Tasks
+redis
+rq
+
+# AI and Data Processing
+chromadb
+sentence-transformers
+zhipuai
+arxiv
+PyMuPDF
+python-dotenv

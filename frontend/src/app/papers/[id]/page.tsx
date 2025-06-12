@@ -2,13 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import api, {ApiPaperBase} from "@/lib/api";
+import api, { ApiPaperBase } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Code } from "lucide-react";
 import Link from "next/link";
-import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface PaperDetails {
   id: string;
@@ -141,26 +141,28 @@ export default function PaperDetailPage() {
       </div>
 
       {recommendations.length > 0 && (
-          <>
-            <Separator className="my-8" />
-            <div className="mb-6">
-              <h2 className="text-2xl font-semibold mb-4">You Might Also Like</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {recommendations.map((rec) => (
-                    <Link href={`/papers/${rec.id}`} key={rec.id}>
-                      <Card className="h-full hover:bg-accent">
-                        <CardHeader>
-                          <CardTitle className="text-base">{rec.title}</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <p className="text-xs text-muted-foreground">{rec.authors.join(", ")}</p>
-                        </CardContent>
-                      </Card>
-                    </Link>
-                ))}
-              </div>
+        <>
+          <Separator className="my-8" />
+          <div className="mb-6">
+            <h2 className="text-2xl font-semibold mb-4">You Might Also Like</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {recommendations.map((rec) => (
+                <Link href={`/papers/${rec.id}`} key={rec.id}>
+                  <Card className="h-full hover:bg-accent">
+                    <CardHeader>
+                      <CardTitle className="text-base">{rec.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-xs text-muted-foreground">
+                        {rec.authors.join(", ")}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
             </div>
-          </>
+          </div>
+        </>
       )}
     </div>
   );

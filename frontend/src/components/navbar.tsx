@@ -19,6 +19,9 @@ export default function Navbar() {
               <Link href="/library">
                 <Button variant="ghost">My Library</Button>
               </Link>
+              <Link href="/submit">
+                <Button variant="ghost">Submit Paper</Button>
+              </Link>
               <span className="text-sm">
                 Welcome, {user?.name || user?.email}
               </span>

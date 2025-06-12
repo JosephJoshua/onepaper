@@ -18,9 +18,9 @@ api.interceptors.request.use(
 );
 
 export interface ApiPaperBase {
-    id: string;
-    title: string;
-    authors: string[];
+  id: string;
+  title: string;
+  authors: string[];
 }
 
 export default api;

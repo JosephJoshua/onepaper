@@ -32,7 +32,7 @@ export default function RegisterPage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       await api.post("/users/register", {
-        username: values.email,
+        email: values.email,
         password: values.password,
         name: values.name,
       });
@@ -40,6 +40,8 @@ export default function RegisterPage() {
       toast.success("Register Successful", {
         description: "Welcome to OnePaper!",
       });
+
+      window.location.href = "/login";
     } catch (error) {
       toast.error("Register Failed", {
         description: "Please contact support if the issue persists.",
@@ -52,7 +54,7 @@ export default function RegisterPage() {
     <div className="flex justify-center items-center mt-10">
       <Card className="w-[400px]">
         <CardHeader>
-          <CardTitle>Login</CardTitle>
+          <CardTitle>Register</CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
