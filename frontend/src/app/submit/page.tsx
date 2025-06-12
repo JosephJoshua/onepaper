@@ -65,8 +65,8 @@ export default function SubmitPage() {
       form.reset(); // Clear the form on success
     } catch (error: unknown) {
       const detail =
-          // @ts-expect-error doesn't matter
-          error.response?.data?.detail || "An unknown error occurred.";
+        // @ts-expect-error doesn't matter
+        error.response?.data?.detail || "An unknown error occurred.";
 
       toast.error("Submission Failed", {
         description: detail,
