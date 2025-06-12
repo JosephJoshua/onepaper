@@ -1,7 +1,8 @@
-# FastAPI and Server
+# Core application
 fastapi
 uvicorn[standard]
 python-multipart
+pydantic[email]  # This format correctly includes email-validator
 
 # Database
 sqlalchemy

@@ -46,3 +46,7 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+# --- Submission Schema ---
+class ArxivSubmission(BaseModel):
+    arxiv_id: str

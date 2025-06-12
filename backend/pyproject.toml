@@ -11,11 +11,15 @@ dependencies = [
     "fastapi (==0.115.9)",
     "uvicorn (>=0.34.3,<0.35.0)",
     "sqlalchemy",
-    "pydantic[email]", "python-jose[cryptography]", "passlib[argon2]", "python-multipart", "python-dotenv (>=1.1.0,<2.0.0)", "argon2-cffi (>=25.1.0,<26.0.0)", "sentence-transformers (>=4.1.0,<5.0.0)", "chromadb (>=1.0.12,<2.0.0)"
+    "pydantic[email]", "python-jose[cryptography]", "passlib[argon2]", "python-multipart", "python-dotenv (>=1.1.0,<2.0.0)", "argon2-cffi (>=25.1.0,<26.0.0)", "sentence-transformers (>=4.1.0,<5.0.0)", "chromadb (>=1.0.12,<2.0.0)", "arxiv (>=2.2.0,<3.0.0)", "redis (>=6.2.0,<7.0.0)", "rq (>=2.3.3,<3.0.0)", "pymupdf (>=1.26.1,<2.0.0)", "zhipuai (>=2.1.5.20250526,<3.0.0.0)"
 ]
 
 [tool.poetry]
 packages = [{include = "backend", from = "src"}]
+
+
+[tool.poetry.requires-plugins]
+poetry-plugin-export = ">=1.8"
 
 
 [build-system]

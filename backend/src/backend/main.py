@@ -1,12 +1,15 @@
+import os
 from typing import List, Optional
 from datetime import timedelta
 
+import redis
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from rq import Queue
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import auth, models, schemas, database
+from . import auth, models, schemas, database, tasks
 
 import chromadb
 from sentence_transformers import SentenceTransformer
@@ -14,8 +17,12 @@ from sentence_transformers import SentenceTransformer
 models.Base.metadata.create_all(bind=database.engine)
 
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-chroma_client = chromadb.PersistentClient(path="chroma_db")
+chroma_client = chromadb.PersistentClient(path="/app/data/chroma_db")
 paper_collection = chroma_client.get_collection(name="papers")
+
+redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
+conn = redis.from_url(redis_url)
+q = Queue(connection=conn)
 
 app = FastAPI()
 
@@ -72,6 +79,23 @@ def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
 
 
 # --- Paper Endpoints ---
+@app.post("/papers/submit", status_code=status.HTTP_202_ACCEPTED)
+def submit_paper_for_processing(
+        submission: schemas.ArxivSubmission,
+        db: Session = Depends(database.get_db),
+        current_user: models.User = Depends(auth.get_current_user),
+):
+    existing_paper = db.query(models.Paper).filter(models.Paper.id == submission.arxiv_id).first()
+    if existing_paper and getattr(existing_paper, 'processed', 0) == 2:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Paper with arXiv ID {submission.arxiv_id} has already been fully processed."
+        )
+
+    job = q.enqueue(tasks.process_new_paper, submission.arxiv_id, job_timeout='10m')
+
+    return {"message": "Paper submission accepted for processing.", "job_id": job.id}
+
 @app.get("/papers", response_model=schemas.PaginatedPaperResponse)
 def read_papers(
     db: Session = Depends(database.get_db),
